@@ -1,0 +1,9 @@
+{
+  "name": "REPOPerformanceKit",
+  "version_number": "0.1.3",
+  "website_url": "https://github.com/IsaiahAnson/REPOPerformanceKit",
+  "description": "BepInEx plugin toggling Unity settings: log filter/dedupe, incremental GC, scene-load GC.Collect, mipmap streaming, Time.maximumDeltaTime clamp, adaptive Time.fixedDeltaTime, camera layerCullDistances, optional FPS overlay. All via config file.",
+  "dependencies": [
+    "BepInEx-BepInExPack-5.4.2100"
+  ]
+}
