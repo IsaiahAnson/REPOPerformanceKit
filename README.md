@@ -1,5 +1,9 @@
 # REPOPerformanceKit
 
+[**Get it on Thunderstore**](https://thunderstore.io/c/repo/p/Mentalize/REPOPerformanceKit/)
+
+<img src="icon.png" width="120" align="right" alt="REPOPerformanceKit icon">
+
 A BepInEx plugin for R.E.P.O. that exposes a set of Unity engine configuration switches through a standard BepInEx config file. It does not patch any REPO game code.
 
 The mod does not guarantee an FPS improvement. Whether it helps, hurts, or does nothing depends on your hardware, your other mods, and the specific scenes you play. Treat every feature as a knob you may or may not want to turn.
