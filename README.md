@@ -77,3 +77,9 @@ Note that on a networked host, lowering `Time.fixedDeltaTime` via the adaptive p
 
 ### 0.1.0
 - Initial implementation (LogSuppressor, FrameRateTuner, GCTuner, AdaptivePhysics, CullDistanceBoost, FPSCounter).
+
+## License
+
+Copyright (c) 2026 Isaiah Anson. All rights reserved. You may use the released software for
+personal, non-commercial use; copying, modifying or redistributing it requires written
+permission. See [LICENSE](LICENSE).
