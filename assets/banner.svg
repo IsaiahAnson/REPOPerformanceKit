@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320" width="960" height="320" role="img" aria-label="REPOPerformanceKit, a R.E.P.O. mod by Mentalize. Unity performance switches in one config file. Client-side, no game code patched, BepInEx 5.">
+<title>REPOPerformanceKit, a R.E.P.O. mod by Mentalize. Unity performance switches in one config file. Client-side, no game code patched, BepInEx 5.</title>
+<style>
+@keyframes knob{from{transform:translateX(-16px);fill:#8f89a8}to{transform:translateX(0);fill:#1b1a27}}
+@keyframes track{from{fill:#3b3552}to{fill:#ffdc50}}
+@keyframes lit{from{fill:#857f9e}to{fill:#d3cee6}}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+.k{animation:knob .45s cubic-bezier(.3,.7,.2,1) both}
+.tr{animation:track .45s ease both}
+.lb{animation:lit .45s ease both}
+.chip{animation:rise .5s ease 1.7s both}
+.halo{animation:pulse 3.4s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.k,.tr,.lb,.chip,.halo{animation:none}}
+</style>
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#15161f"/><stop offset="0.55" stop-color="#231d32"/><stop offset="1" stop-color="#312345"/></linearGradient>
+<linearGradient id="tile" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1c1b29"/><stop offset="1" stop-color="#3a2a55"/></linearGradient>
+<radialGradient id="g1" cx="88" cy="86" r="330" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffdc50" stop-opacity="0.2"/><stop offset="1" stop-color="#ffdc50" stop-opacity="0"/></radialGradient>
+<radialGradient id="g2" cx="900" cy="340" r="340" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#8b5cf6" stop-opacity="0.3"/><stop offset="1" stop-color="#8b5cf6" stop-opacity="0"/></radialGradient>
+<radialGradient id="halo" cx="88" cy="86" r="62" gradientUnits="userSpaceOnUse"><stop offset="0.45" stop-color="#ffdc50" stop-opacity="0.42"/><stop offset="1" stop-color="#ffdc50" stop-opacity="0"/></radialGradient>
+<pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#ffffff" fill-opacity="0.5"/></pattern>
+<linearGradient id="fade" x1="0" y1="0" x2="1" y2="0"><stop offset="0.35" stop-color="#ffffff" stop-opacity="0"/><stop offset="1" stop-color="#ffffff" stop-opacity="0.2"/></linearGradient>
+<mask id="m"><rect width="960" height="320" fill="url(#fade)"/></mask>
+<clipPath id="clip"><rect width="960" height="320" rx="20"/></clipPath>
+</defs>
+<g clip-path="url(#clip)">
+<rect width="960" height="320" fill="url(#bg)"/>
+<rect width="960" height="320" fill="url(#dots)" mask="url(#m)"/>
+<rect width="960" height="320" fill="url(#g1)"/>
+<rect width="960" height="320" fill="url(#g2)"/>
+<polygon points="40,6 15,37 29,37 23,58 49,27 35,27" transform="translate(410 -40) scale(6.4)" fill="#ffdc50" fill-opacity="0.035"/>
+</g>
+<rect x="0.5" y="0.5" width="959" height="319" rx="19.5" fill="none" stroke="#ffffff" stroke-opacity="0.1"/>
+<g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif">
+<circle class="halo" cx="88" cy="86" r="62" fill="url(#halo)"/>
+<rect x="56" y="54" width="64" height="64" rx="16" fill="url(#tile)" stroke="#ffdc50" stroke-opacity="0.5" stroke-width="1.5"/>
+<polygon points="40,6 15,37 29,37 23,58 49,27 35,27" transform="translate(64 62) scale(0.75)" fill="#ffdc50"/>
+<text x="137" y="82" font-size="12.5" font-weight="700" letter-spacing="2.2" fill="#ffdc50">R.E.P.O. MOD</text>
+<text x="137" y="104" font-size="14" fill="#a39dbb">by Mentalize</text>
+<text x="55" y="182" font-size="46" font-weight="700" letter-spacing="-0.6" fill="#f6f4ff">REPOPerformanceKit</text>
+<text x="57" y="217" font-size="20" fill="#d3cee6">Unity performance switches in one config file.</text>
+<rect x="56.5" y="242.5" width="95" height="25" rx="12.5" fill="#ffffff" fill-opacity="0.04" stroke="#ffffff" stroke-opacity="0.18"/><text x="104.0" y="259.3" font-size="13" fill="#d3cee6" text-anchor="middle">Client-side</text>
+<rect x="160.5" y="242.5" width="163" height="25" rx="12.5" fill="#ffffff" fill-opacity="0.04" stroke="#ffffff" stroke-opacity="0.18"/><text x="242.0" y="259.3" font-size="13" fill="#d3cee6" text-anchor="middle">No game code patched</text>
+<rect x="332.5" y="242.5" width="89" height="25" rx="12.5" fill="#ffffff" fill-opacity="0.04" stroke="#ffffff" stroke-opacity="0.18"/><text x="377.0" y="259.3" font-size="13" fill="#d3cee6" text-anchor="middle">BepInEx 5</text>
+<rect x="600" y="42" width="312" height="236" rx="14" fill="#ffffff" fill-opacity="0.05" stroke="#ffffff" stroke-opacity="0.13"/>
+<path d="M617.5 54.5 h6.5 l4 4 v10.5 h-10.5 z M624 54.5 v4 h4" fill="none" stroke="#a39dbb" stroke-width="1.3" stroke-linejoin="round"/>
+<text x="638" y="66" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" fill="#a39dbb">com.mentalize.repoperformance.cfg</text>
+<path d="M600 80 H912" stroke="#ffffff" stroke-opacity="0.1"/>
+<text class="lb" style="animation-delay:0.50s" x="618" y="101" font-size="14.5" fill="#d3cee6">Log filter and dedupe</text>
+<rect class="tr" style="animation-delay:0.50s" x="862" y="87" width="34" height="18" rx="9" fill="#ffdc50"/>
+<circle class="k" style="animation-delay:0.50s" cx="887" cy="96" r="6.5" fill="#1b1a27"/>
+<path d="M616 112 H896" stroke="#ffffff" stroke-opacity="0.05"/>
+<text class="lb" style="animation-delay:0.72s" x="618" y="133" font-size="14.5" fill="#d3cee6">Incremental GC</text>
+<rect class="tr" style="animation-delay:0.72s" x="862" y="119" width="34" height="18" rx="9" fill="#ffdc50"/>
+<circle class="k" style="animation-delay:0.72s" cx="887" cy="128" r="6.5" fill="#1b1a27"/>
+<path d="M616 144 H896" stroke="#ffffff" stroke-opacity="0.05"/>
+<text x="618" y="165" font-size="14.5" fill="#857f9e">Mipmap streaming</text>
+<rect x="862" y="151" width="34" height="18" rx="9" fill="#3b3552"/>
+<circle cx="871" cy="160" r="6.5" fill="#8f89a8"/>
+<path d="M616 176 H896" stroke="#ffffff" stroke-opacity="0.05"/>
+<text class="lb" style="animation-delay:0.94s" x="618" y="197" font-size="14.5" fill="#d3cee6">Adaptive physics tick</text>
+<rect class="tr" style="animation-delay:0.94s" x="862" y="183" width="34" height="18" rx="9" fill="#ffdc50"/>
+<circle class="k" style="animation-delay:0.94s" cx="887" cy="192" r="6.5" fill="#1b1a27"/>
+<path d="M616 208 H896" stroke="#ffffff" stroke-opacity="0.05"/>
+<text x="618" y="229" font-size="14.5" fill="#857f9e">Layer cull distances</text>
+<rect x="862" y="215" width="34" height="18" rx="9" fill="#3b3552"/>
+<circle cx="871" cy="224" r="6.5" fill="#8f89a8"/>
+<path d="M616 240 H896" stroke="#ffffff" stroke-opacity="0.05"/>
+<text class="lb" style="animation-delay:1.16s" x="618" y="261" font-size="14.5" fill="#d3cee6">FPS overlay</text>
+<rect class="tr" style="animation-delay:1.16s" x="862" y="247" width="34" height="18" rx="9" fill="#ffdc50"/>
+<circle class="k" style="animation-delay:1.16s" cx="887" cy="256" r="6.5" fill="#1b1a27"/>
+<g class="chip"><rect x="732" y="270" width="196" height="28" rx="14" fill="#15161f" stroke="#ffdc50" stroke-opacity="0.6"/><text x="830" y="288.5" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" font-weight="700" fill="#ffdc50" text-anchor="middle">60 FPS · 16.7 ms · 50 Hz</text></g>
+</g>
+</svg>
