@@ -1,7 +1,7 @@
 """Draws the downloads card for the README from the live Thunderstore count.
 
 Usage:
-    python tools/make_downloads_card.py --out assets/downloads.svg
+    python tools/make_downloads_card.py --out out/downloads.svg
     python tools/make_downloads_card.py --out card.svg --downloads 19012 --version 0.1.3   (no network)
 
 Standard library only, so a scheduled job can run it with no install step.
