@@ -1,8 +1,6 @@
-# REPOPerformanceKit
+<img src="assets/banner.svg" width="100%" alt="REPOPerformanceKit, a R.E.P.O. mod by Mentalize. Unity performance switches in one config file. Client-side, no game code patched, BepInEx 5.">
 
-[**Get it on Thunderstore**](https://thunderstore.io/c/repo/p/Mentalize/REPOPerformanceKit/)
-
-<img src="icon.png" width="120" align="right" alt="REPOPerformanceKit icon">
+<a href="https://thunderstore.io/c/repo/p/Mentalize/REPOPerformanceKit/"><img src="https://raw.githubusercontent.com/IsaiahAnson/REPOPerformanceKit/stats/downloads.svg" width="100%" alt="Download count and latest version on Thunderstore. Get it on Thunderstore."></a>
 
 A BepInEx plugin for R.E.P.O. that exposes a set of Unity engine configuration switches through a standard BepInEx config file. It does not patch any REPO game code.
 
