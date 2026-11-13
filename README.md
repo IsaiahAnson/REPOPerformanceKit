@@ -8,14 +8,12 @@ The mod does not guarantee an FPS improvement. Whether it helps, hurts, or does 
 
 **Live release:** [thunderstore.io/c/repo/p/Mentalize/REPOPerformanceKit](https://thunderstore.io/c/repo/p/Mentalize/REPOPerformanceKit/) — published under the author handle Mentalize, install via Thunderstore Mod Manager or by dropping the DLL into BepInEx (see [Install](#install)).
 
-> **Source migration note.** The compiled DLL, manifest, README, and Thunderstore release zip are tracked in this repository. The original C# source tree is maintained outside this commit history and will be migrated under a follow-up commit. The README below documents every behavior the shipped DLL exhibits at runtime, so it is independently verifiable from the BepInEx config it generates and the methods it calls.
-
 ## Approach, tools, and assumptions
 
 **Approach.** This is a *configuration kit*, not a Harmony-patch mod. Every feature is a Unity engine knob — log filtering, GC mode, `Time.maximumDeltaTime`, `Time.fixedDeltaTime`, mipmap streaming, layer cull distances, optional FPS overlay — toggled by a BepInEx config flag and called through the public Unity API. The plugin never patches REPO's own code, never reads or modifies REPO game state, and never sends any network traffic. The deliberate intent is a transparent "every Unity perf knob in one place" tool rather than a black box of patches that other mods or REPO updates could collide with.
 
 **Tools.**
-- C# / .NET Standard 2.1, BepInEx 5.4.2100 (Mono build — not IL2CPP).
+- C# / .NET Framework 4.7.2, BepInEx 5.4.2100 (Mono build — not IL2CPP).
 - Unity 2022.3.21 modules (compile-only references via `UnityEngine.Modules` NuGet).
 - No Harmony patches. No reflection on REPO classes.
 
@@ -30,17 +28,17 @@ The mod does not guarantee an FPS improvement. Whether it helps, hurts, or does 
 
 On plugin `Awake()`, it reads its config file and then:
 
-- **Log filtering.** If `DisableUnityStackTraces = true`, calls `Application.SetStackTraceLogType(LogType.Log/Warning, StackTraceLogType.None)` and sets `Error/Exception/Assert` to `ScriptOnly`. If `SuppressPluginLogSpam` or `DedupeRepeatedLogs` is true, inserts a custom `BepInEx.Logging.ILogListener` in front of the existing listeners. The listener drops any Info/Debug/Message line whose text contains one of the configured substrings, and collapses consecutive identical lines to a `(previous message repeated N times)` summary. Warnings/Errors/Fatals are never filtered by substring.
+- **Log filtering.** If `DisableUnityStackTraces = true`, calls `Application.SetStackTraceLogType(LogType.Log/Warning, StackTraceLogType.None)` and sets `Error/Exception/Assert` to `ScriptOnly`. If `SuppressPluginLogSpam` or `DedupeRepeatedLogs` is true, inserts a custom `BepInEx.Logging.ILogListener` in front of the existing listeners. The listener drops any Info/Debug/Message line whose text contains one of the configured substrings, and collapses consecutive identical lines to a `(previous message repeated N more times)` summary. Warnings/Errors/Fatals are never filtered by substring.
 
 - **Frame-rate related Unity values.** Sets `Time.maximumDeltaTime` to the configured value (default `0.1`). Optionally sets `QualitySettings.vSyncCount` (default: unchanged) and `Application.targetFrameRate` (default: unchanged).
 
-- **GC tuning.** If `EnableIncrementalGC = true`, reflects into `UnityEngine.Scripting.GarbageCollector.GCMode` and sets it to `Enabled`. If that type or property isn't present, logs a warning and continues. If `CollectGCOnSceneLoad = true`, hooks `SceneManager.sceneLoaded` and calls `GC.Collect()` + `GC.WaitForPendingFinalizers()` on full (non-additive) scene loads.
+- **GC tuning.** If `EnableIncrementalGC = true`, reflects into `UnityEngine.Scripting.GarbageCollector.GCMode` and sets it to `Enabled`. If that type or property isn't present, logs a warning and continues. If `CollectGCOnSceneLoad = true`, hooks `SceneManager.sceneLoaded` and calls `GC.Collect()`, `GC.WaitForPendingFinalizers()`, then `GC.Collect()` again on full (non-additive) scene loads.
 
 - **Mipmap streaming.** If `EnableTextureStreaming = true`, sets `QualitySettings.streamingMipmapsActive = true`, `streamingMipmapsMemoryBudget` to the configured MB value (clamped to `[128, 8192]`, default `1024`), `streamingMipmapsMaxLevelReduction = 2`, `streamingMipmapsMaxFileIORequests = 256`, and `streamingMipmapsAddAllCameras = true`.
 
 - **Adaptive fixedDeltaTime.** If `EnableAdaptivePhysics = true`, creates a `DontDestroyOnLoad` MonoBehaviour that samples smoothed unscaled FPS once per second. If smoothed FPS falls below `DegradeBelowFps` (default 40), sets `Time.fixedDeltaTime` to `DegradedFixedDeltaTime` (default 0.0333, i.e. 30 Hz). If it then rises above `RecoverAboveFps` (default 55), resets to `BaselineFixedDeltaTime` (default 0.02, i.e. 50 Hz).
 
-- **Layer cull distances.** If `EnableCullDistanceBoost = true`, hooks `SceneManager.sceneLoaded` and sets `Camera.main.layerCullDistances` for layers `8..31` to `farClipPlane * Multiplier`, leaving layers `0..7` at the default. **The default `Multiplier` is `1.0`, which changes nothing.** Only becomes effective if you lower it in the config file.
+- **Layer cull distances.** If `EnableCullDistanceBoost = true`, applies to the current scene and hooks `SceneManager.sceneLoaded` to reapply on each load. It sets `Camera.main.layerCullDistances` for layers `8..31` to `farClipPlane * Multiplier` (the multiplier is clamped to `0.25..1.0`) and turns on spherical culling, leaving layers `0..7` at the default. **The default `Multiplier` is `1.0`, which changes nothing.** Only becomes effective if you lower it in the config file.
 
 - **Optional FPS overlay.** If `ShowFpsOverlay = true` (default `false`), creates a `DontDestroyOnLoad` MonoBehaviour that draws a single IMGUI label in the top-left corner showing smoothed FPS, frametime in ms, and the current physics tick rate derived from `Time.fixedDeltaTime`.
 
@@ -52,7 +50,13 @@ Thunderstore Mod Manager: open the [live release](https://thunderstore.io/c/repo
 
 ## Building from source
 
-The original C# source tree for this mod is maintained in a separate local workspace and is not yet mirrored in this repository — see the **Source migration note** at the top of this README. The shipped binary (`REPOPerformance.dll`) and the Thunderstore release bundle (`REPOPerformanceKit-0.1.3.zip`) are committed alongside the docs so the deployed artifact remains reproducible and verifiable from this repo. Source migration is on the roadmap.
+The C# project is in [`src/`](src): one file per feature under `src/Features/`, the settings in `src/Config/PerformanceConfig.cs`, and the entry point in `src/Plugin.cs`. It needs only the .NET SDK (6 or later). BepInEx and the Unity modules come from NuGet as compile-only references (`src/NuGet.Config` adds the BepInEx feed), so no game files are required.
+
+```bash
+dotnet build src -c Release
+```
+
+The DLL lands in `src/bin/Release/net472/REPOPerformance.dll`. The source was restored from the 0.1.3 release build, and it compiles to the same IL as the `REPOPerformance.dll` committed here. A GitHub Actions job builds it on every change to `src/`.
 
 To use the precompiled DLL: drop `REPOPerformance.dll` into `<BepInEx profile>/BepInEx/plugins/REPOPerformanceKit/` and launch the game; configuration is read from `BepInEx/config/com.mentalize.repoperformance.cfg`, generated with defaults on first run.
 

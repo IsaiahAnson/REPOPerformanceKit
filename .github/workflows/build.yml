@@ -1,0 +1,34 @@
+# Builds the plugin from src/ whenever the source changes, so the code is known to compile from
+# NuGet packages alone (no game files). The built DLL is kept as a run artifact for a week.
+name: Build
+
+on:
+  push:
+    branches: [main]
+    paths: ["src/**", ".github/workflows/build.yml"]
+  pull_request:
+    paths: ["src/**", ".github/workflows/build.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build
+        run: dotnet build src -c Release -nologo
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: REPOPerformance
+          path: src/bin/Release/net472/REPOPerformance.dll
+          retention-days: 7
