@@ -55,17 +55,17 @@
 <rect x="862" y="127" width="34" height="18" rx="9" fill="#3b3552"/>
 <circle cx="871" cy="136" r="6.5" fill="#8f89a8"/>
 <path d="M616 156 H896" stroke="#ffffff" stroke-opacity="0.05"/>
-<text class="lb" style="animation-delay:0.72s" x="618" y="181" font-size="14.5" fill="#d3cee6">Adaptive physics tick</text>
-<rect class="tr" style="animation-delay:0.72s" x="862" y="167" width="34" height="18" rx="9" fill="#ffdc50"/>
-<circle class="k" style="animation-delay:0.72s" cx="887" cy="176" r="6.5" fill="#1b1a27"/>
+<text x="618" y="181" font-size="14.5" fill="#857f9e">Adaptive physics tick</text>
+<rect x="862" y="167" width="34" height="18" rx="9" fill="#3b3552"/>
+<circle cx="871" cy="176" r="6.5" fill="#8f89a8"/>
 <path d="M616 196 H896" stroke="#ffffff" stroke-opacity="0.05"/>
 <text x="618" y="221" font-size="14.5" fill="#857f9e">Layer cull distances</text>
 <rect x="862" y="207" width="34" height="18" rx="9" fill="#3b3552"/>
 <circle cx="871" cy="216" r="6.5" fill="#8f89a8"/>
 <path d="M616 236 H896" stroke="#ffffff" stroke-opacity="0.05"/>
-<text class="lb" style="animation-delay:0.94s" x="618" y="261" font-size="14.5" fill="#d3cee6">FPS overlay</text>
-<rect class="tr" style="animation-delay:0.94s" x="862" y="247" width="34" height="18" rx="9" fill="#ffdc50"/>
-<circle class="k" style="animation-delay:0.94s" cx="887" cy="256" r="6.5" fill="#1b1a27"/>
+<text class="lb" style="animation-delay:0.72s" x="618" y="261" font-size="14.5" fill="#d3cee6">FPS overlay</text>
+<rect class="tr" style="animation-delay:0.72s" x="862" y="247" width="34" height="18" rx="9" fill="#ffdc50"/>
+<circle class="k" style="animation-delay:0.72s" cx="887" cy="256" r="6.5" fill="#1b1a27"/>
 <g class="chip"><rect x="732" y="270" width="196" height="28" rx="14" fill="#15161f" stroke="#ffdc50" stroke-opacity="0.6"/><text x="830" y="288.5" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="12.5" font-weight="700" fill="#ffdc50" text-anchor="middle">60 FPS · 16.7 ms · 50 Hz</text></g>
 </g>
 </svg>
