@@ -5,75 +5,169 @@ using UnityEngine;
 namespace REPOPerformance.Features;
 
 /// <summary>
-/// Lowers the physics tick rate while the smoothed frame rate is low and restores it once the
-/// frame rate recovers. The gap between the two thresholds stops it from flapping.
+/// Optional and off by default. While the smoothed frame rate is low it raises Time.fixedDeltaTime
+/// (fewer physics steps per second), and it puts the game's own value back when the frame rate recovers
+/// or the setting is turned off. It never writes Time.fixedDeltaTime at any other time.
 /// </summary>
 internal static class AdaptivePhysics
 {
-    private static GameObject _host;
+    private const float MinimumGapFps = 5f;
+    private const float Tolerance = 0.00005f;
+    private const float HitchSeconds = 0.5f;
+
+    private static PerformanceConfig _cfg;
+    private static ManualLogSource _log;
+    private static Runner _runner;
 
     public static void Apply(PerformanceConfig cfg, ManualLogSource log)
     {
-        if (!cfg.EnableAdaptivePhysics.Value)
+        _cfg = cfg;
+        _log = log;
+        log.LogInfo($"Time.fixedDeltaTime is {Time.fixedDeltaTime:F4}s ({1f / Time.fixedDeltaTime:F0} Hz) in this game build.");
+
+        _runner = RuntimeHost.Add<Runner>(cfg.EnableAdaptivePhysics.Value);
+        if (cfg.EnableAdaptivePhysics.Value)
         {
-            return;
+            log.LogInfo("Adaptive physics is on.");
         }
 
-        Time.fixedDeltaTime = cfg.BaselineFixedDeltaTime.Value;
-
-        _host = new GameObject("REPOPerformance_AdaptivePhysics");
-        Object.DontDestroyOnLoad(_host);
-        _host.hideFlags = HideFlags.HideAndDontSave;
-        _host.AddComponent<AdaptivePhysicsRunner>().Configure(cfg, log);
-        log.LogInfo("Adaptive physics runner started.");
+        cfg.EnableAdaptivePhysics.SettingChanged += (_, _) =>
+        {
+            if (_runner != null)
+            {
+                _runner.enabled = _cfg.EnableAdaptivePhysics.Value;
+                _log.LogInfo(_runner.enabled ? "Adaptive physics is on." : "Adaptive physics is off.");
+            }
+        };
     }
 
-    private sealed class AdaptivePhysicsRunner : MonoBehaviour
+    private sealed class Runner : MonoBehaviour
     {
-        private PerformanceConfig _cfg;
-        private ManualLogSource _log;
-        private float _smoothedFps = 60f;
+        private float _smoothedFps;
         private float _sampleTimer;
         private bool _degraded;
+        private bool _warnedNoRoom;
+        private float _original;
+        private float _applied;
 
-        public void Configure(PerformanceConfig cfg, ManualLogSource log)
+        private void OnEnable()
         {
-            _cfg = cfg;
-            _log = log;
+            _smoothedFps = 0f;
+            _sampleTimer = 0f;
+            _warnedNoRoom = false;
+        }
+
+        private void OnDisable()
+        {
+            Restore("turned off");
         }
 
         private void Update()
         {
-            if (_cfg == null)
+            // A frame this long is a loading hitch, not a frame rate. Counting it would lower the tick
+            // rate for a moment after every load, and at startup the very first frame is one.
+            float deltaTime = Time.unscaledDeltaTime;
+            if (deltaTime <= 0f || deltaTime > HitchSeconds)
             {
                 return;
             }
 
-            float fps = 1f / Mathf.Max(Time.unscaledDeltaTime, 0.0001f);
-            _smoothedFps = Mathf.Lerp(_smoothedFps, fps, 0.05f);
+            float fps = 1f / deltaTime;
+            _smoothedFps = _smoothedFps <= 0f ? fps : Mathf.Lerp(_smoothedFps, fps, 0.05f);
 
             // Decide once a second, on the smoothed value.
-            _sampleTimer += Time.unscaledDeltaTime;
+            _sampleTimer += deltaTime;
             if (_sampleTimer < 1f)
             {
                 return;
             }
             _sampleTimer = 0f;
 
-            if (!_degraded && _smoothedFps < _cfg.DegradeBelowFps.Value)
+            float degradeBelow = _cfg.DegradeBelowFps.Value;
+            // The gap between the two thresholds is what stops it from flapping, so keep one.
+            float recoverAbove = Mathf.Max(_cfg.RecoverAboveFps.Value, degradeBelow + MinimumGapFps);
+
+            if (_degraded)
             {
-                Time.fixedDeltaTime = _cfg.DegradedFixedDeltaTime.Value;
-                _degraded = true;
-                _log.LogInfo($"Adaptive physics: degraded -> fixedDeltaTime={Time.fixedDeltaTime:F4} " +
-                             $"(fps {_smoothedFps:F1}).");
+                WhileDegraded(recoverAbove);
             }
-            else if (_degraded && _smoothedFps > _cfg.RecoverAboveFps.Value)
+            else if (_smoothedFps < degradeBelow)
             {
-                Time.fixedDeltaTime = _cfg.BaselineFixedDeltaTime.Value;
+                Degrade();
+            }
+        }
+
+        private void Degrade()
+        {
+            float current = Time.fixedDeltaTime;
+            float wanted = _cfg.DegradedFixedDeltaTime.Value;
+            if (wanted <= current + Tolerance)
+            {
+                if (!_warnedNoRoom)
+                {
+                    _warnedNoRoom = true;
+                    _log.LogInfo($"Adaptive physics: DegradedFixedDeltaTime ({wanted:F4}) is not above the game's " +
+                                 $"fixedDeltaTime ({current:F4}), so there is nothing to lower.");
+                }
+                return;
+            }
+
+            _original = current;
+            Time.fixedDeltaTime = wanted;
+            _applied = Time.fixedDeltaTime;
+            _degraded = true;
+            _log.LogInfo($"Adaptive physics: degraded -> fixedDeltaTime={_applied:F4} (fps {_smoothedFps:F1}).");
+        }
+
+        private void WhileDegraded(float recoverAbove)
+        {
+            if (Mathf.Abs(Time.fixedDeltaTime - _applied) > Tolerance)
+            {
+                // The game or another mod set its own value. That value wins; forget ours.
                 _degraded = false;
-                _log.LogInfo($"Adaptive physics: recovered -> fixedDeltaTime={Time.fixedDeltaTime:F4} " +
-                             $"(fps {_smoothedFps:F1}).");
+                _log.LogInfo($"Adaptive physics: fixedDeltaTime was changed elsewhere to {Time.fixedDeltaTime:F4}, leaving it alone.");
+                return;
             }
+
+            if (_smoothedFps > recoverAbove)
+            {
+                Restore("recovered");
+                return;
+            }
+
+            // The degraded value was edited in the config menu while it is in use.
+            float wanted = _cfg.DegradedFixedDeltaTime.Value;
+            if (Mathf.Abs(wanted - _applied) > Tolerance)
+            {
+                if (wanted > _original + Tolerance)
+                {
+                    Time.fixedDeltaTime = wanted;
+                    _applied = Time.fixedDeltaTime;
+                    _log.LogInfo($"Adaptive physics: degraded -> fixedDeltaTime={_applied:F4} (fps {_smoothedFps:F1}).");
+                }
+                else
+                {
+                    Restore("recovered");
+                }
+            }
+        }
+
+        private void Restore(string reason)
+        {
+            if (!_degraded)
+            {
+                return;
+            }
+            _degraded = false;
+
+            if (Mathf.Abs(Time.fixedDeltaTime - _applied) > Tolerance)
+            {
+                _log.LogInfo($"Adaptive physics: fixedDeltaTime was changed elsewhere to {Time.fixedDeltaTime:F4}, leaving it alone.");
+                return;
+            }
+
+            Time.fixedDeltaTime = _original;
+            _log.LogInfo($"Adaptive physics: {reason} -> fixedDeltaTime={Time.fixedDeltaTime:F4} (fps {_smoothedFps:F1}).");
         }
     }
 }

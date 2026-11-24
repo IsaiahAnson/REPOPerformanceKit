@@ -1,17 +1,25 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!-- The version is written in one place: version_number in ../manifest.json. -->
+    <ManifestPath>$(MSBuildThisFileDirectory)../manifest.json</ManifestPath>
+    <ManifestText>$([System.IO.File]::ReadAllText('$(ManifestPath)'))</ManifestText>
+    <ManifestVersion>$([System.Text.RegularExpressions.Regex]::Match($(ManifestText), '(?&lt;="version_number"\s*:\s*")\d+\.\d+\.\d+').Value)</ManifestVersion>
+  </PropertyGroup>
+
+  <PropertyGroup>
     <AssemblyName>REPOPerformance</AssemblyName>
     <RootNamespace>REPOPerformance</RootNamespace>
     <!-- R.E.P.O. runs on Mono; BepInEx 5 plugins for it build against .NET Framework 4.7.2. -->
     <TargetFramework>net472</TargetFramework>
     <LangVersion>latest</LangVersion>
-    <Version>0.1.0</Version>
+    <Version>$(ManifestVersion)</Version>
     <Product>REPOPerformance</Product>
     <Company>REPOPerformance</Company>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <DebugType>none</DebugType>
     <RestoreAdditionalProjectSources>https://nuget.bepinex.dev/v3/index.json</RestoreAdditionalProjectSources>
+    <PluginVersionFile>$(MSBuildThisFileDirectory)obj/PluginInfo.Version.g.cs</PluginVersionFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,5 +32,15 @@
   <ItemGroup Condition="'$(TargetFramework.TrimEnd(`0123456789`))' == 'net'">
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.2" PrivateAssets="all" />
   </ItemGroup>
+
+  <!-- Writes PluginInfo.Version from manifest.json, so the [BepInPlugin] version matches the package. -->
+  <Target Name="GeneratePluginVersion" BeforeTargets="CoreCompile">
+    <Error Condition="'$(ManifestVersion)' == ''" Text="No version_number (x.y.z) found in $(ManifestPath)." />
+    <WriteLinesToFile File="$(PluginVersionFile)" Overwrite="true" WriteOnlyWhenDifferent="true" Lines="// Generated from manifest.json by REPOPerformance.csproj. Do not edit.;namespace REPOPerformance%3B;internal static partial class PluginInfo { public const string Version = &quot;$(ManifestVersion)&quot;%3B }" />
+    <ItemGroup>
+      <Compile Remove="$(PluginVersionFile)" />
+      <Compile Include="$(PluginVersionFile)" />
+    </ItemGroup>
+  </Target>
 
 </Project>

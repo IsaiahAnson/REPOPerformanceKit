@@ -3,6 +3,9 @@ bin/
 obj/
 dist/
 
+# Captures written by tools/watch-repo-log.ps1
+logs/
+
 # IDE
 .vs/
 .idea/

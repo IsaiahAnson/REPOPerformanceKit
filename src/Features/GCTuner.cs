@@ -1,14 +1,14 @@
 using System;
-using System.Reflection;
 using BepInEx.Logging;
 using REPOPerformance.Config;
-using UnityEngine.SceneManagement;
+using UnityEngine.Scripting;
 
 namespace REPOPerformance.Features;
 
 /// <summary>
-/// Turns on Unity's incremental GC, and runs a full collection while a new scene loads,
-/// where the loading screen hides the pause.
+/// Runs a full collection after each scene change (menu, lobby or level), where the loading screen
+/// hides the pause. Incremental GC is a build setting of the game that a plugin cannot switch, so it
+/// is only reported.
 /// </summary>
 internal static class GCTuner
 {
@@ -21,40 +21,41 @@ internal static class GCTuner
         _cfg = cfg;
         _log = log;
 
-        if (cfg.EnableIncrementalGC.Value)
+        try
         {
-            try
-            {
-                // Looked up by name so the plugin still loads on Unity builds without the API.
-                Type collector = Type.GetType("UnityEngine.Scripting.GarbageCollector, UnityEngine.CoreModule");
-                if (collector != null)
-                {
-                    PropertyInfo gcMode = collector.GetProperty("GCMode", BindingFlags.Static | BindingFlags.Public);
-                    if (gcMode != null && gcMode.PropertyType.IsEnum)
-                    {
-                        object enabled = Enum.Parse(gcMode.PropertyType, "Enabled");
-                        gcMode.SetValue(null, enabled, null);
-                        log.LogInfo("Unity incremental GC enabled.");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                log.LogWarning("Could not enable incremental GC: " + ex.Message);
-            }
+            ReportIncrementalGc(log);
+        }
+        catch (Exception ex)
+        {
+            log.LogDebug("Could not read the incremental GC state: " + ex.Message);
         }
 
-        if (cfg.CollectGCOnSceneLoad.Value && !_hooked)
+        if (!_hooked)
         {
-            SceneManager.sceneLoaded += OnSceneLoaded;
+            SceneWatcher.Settled += OnSceneSettled;
+            SceneWatcher.Start();
             _hooked = true;
-            log.LogInfo("GC.Collect will run on scene load.");
+        }
+
+        if (cfg.CollectGCOnSceneLoad.Value)
+        {
+            log.LogInfo("GC.Collect will run after each scene change.");
         }
     }
 
-    private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    // Kept in its own method so a Unity build without this API fails here, inside the caller's try.
+    private static void ReportIncrementalGc(ManualLogSource log)
     {
-        if (mode != LoadSceneMode.Single)
+        string state = GarbageCollector.isIncremental
+            ? $"on (time slice {GarbageCollector.incrementalTimeSliceNanoseconds / 1000000.0:F1} ms)"
+            : "off";
+        log.LogInfo($"Incremental GC is {state} in this game build. This plugin does not change it.");
+    }
+
+    private static void OnSceneSettled(string sceneName)
+    {
+        // Read the setting here, so a change made in the config menu applies from the next scene change.
+        if (!_cfg.CollectGCOnSceneLoad.Value)
         {
             return;
         }
@@ -62,6 +63,6 @@ internal static class GCTuner
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
-        _log.LogInfo("GC pass after loading scene '" + scene.name + "'.");
+        _log.LogInfo("GC pass after the scene change to '" + sceneName + "'.");
     }
 }

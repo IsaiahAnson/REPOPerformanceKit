@@ -8,79 +8,152 @@ namespace REPOPerformance.Features;
 
 /// <summary>
 /// Cuts log cost two ways: turns off Unity's stack-trace capture for plain logs and warnings,
-/// and puts a filtering listener in front of every BepInEx log listener.
+/// and puts a filtering listener in front of the BepInEx log listeners that exist when it starts.
 /// </summary>
 internal static class LogSuppressor
 {
+    private static readonly LogType[] LogTypes =
+    {
+        LogType.Log, LogType.Warning, LogType.Error, LogType.Exception, LogType.Assert
+    };
+
+    private static PerformanceConfig _cfg;
+    private static ManualLogSource _log;
+    private static StackTraceLogType[] _originalStackTraces;
     private static FilteringListener _listener;
 
     public static void Apply(PerformanceConfig cfg, ManualLogSource log)
     {
-        if (cfg.DisableUnityStackTraces.Value)
+        _cfg = cfg;
+        _log = log;
+
+        RefreshStackTraces();
+        RefreshListener();
+
+        cfg.DisableUnityStackTraces.SettingChanged += (_, _) => RefreshStackTraces();
+        cfg.SuppressPluginLogSpam.SettingChanged += (_, _) => RefreshListener();
+        cfg.SuppressedSubstrings.SettingChanged += (_, _) => RefreshListener();
+        cfg.DedupeRepeatedLogs.SettingChanged += (_, _) => RefreshListener();
+    }
+
+    private static void RefreshStackTraces()
+    {
+        try
         {
-            try
+            if (_cfg.DisableUnityStackTraces.Value)
             {
+                if (_originalStackTraces == null)
+                {
+                    _originalStackTraces = new StackTraceLogType[LogTypes.Length];
+                    for (int i = 0; i < LogTypes.Length; i++)
+                    {
+                        _originalStackTraces[i] = Application.GetStackTraceLogType(LogTypes[i]);
+                    }
+                }
+
                 Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
                 Application.SetStackTraceLogType(LogType.Warning, StackTraceLogType.None);
                 Application.SetStackTraceLogType(LogType.Error, StackTraceLogType.ScriptOnly);
                 Application.SetStackTraceLogType(LogType.Exception, StackTraceLogType.ScriptOnly);
                 Application.SetStackTraceLogType(LogType.Assert, StackTraceLogType.ScriptOnly);
-                log.LogInfo("Unity stack-trace capture disabled for Log/Warning.");
+                _log.LogInfo("Unity stack-trace capture disabled for Log/Warning.");
             }
-            catch (Exception ex)
+            else if (_originalStackTraces != null)
             {
-                log.LogWarning("Failed to set Unity stack trace log type: " + ex.Message);
+                for (int i = 0; i < LogTypes.Length; i++)
+                {
+                    Application.SetStackTraceLogType(LogTypes[i], _originalStackTraces[i]);
+                }
+                _originalStackTraces = null;
+                _log.LogInfo("Unity stack-trace capture restored to the game's own settings.");
             }
         }
-
-        if (cfg.SuppressPluginLogSpam.Value || cfg.DedupeRepeatedLogs.Value)
+        catch (Exception ex)
         {
-            List<string> substrings = ParseSubstrings(cfg.SuppressedSubstrings.Value);
-            _listener = new FilteringListener(substrings, cfg.DedupeRepeatedLogs.Value);
-            BepInEx.Logging.Logger.Listeners.Add(_listener);
-            log.LogInfo($"Installed filtering log listener ({substrings.Count} substring filters, " +
-                        $"dedupe={cfg.DedupeRepeatedLogs.Value}).");
+            _log.LogWarning("Failed to set Unity stack trace log type: " + ex.Message);
         }
     }
 
-    private static List<string> ParseSubstrings(string raw)
+    private static void RefreshListener()
     {
-        var result = new List<string>();
-        if (string.IsNullOrWhiteSpace(raw))
+        bool filter = _cfg.SuppressPluginLogSpam.Value;
+        bool dedupe = _cfg.DedupeRepeatedLogs.Value;
+        string[] substrings = filter ? ParseSubstrings(_cfg.SuppressedSubstrings.Value) : new string[0];
+
+        if (_listener == null)
         {
-            return result;
+            if (!filter && !dedupe)
+            {
+                return;
+            }
+
+            _listener = new FilteringListener();
+            _listener.Configure(substrings, dedupe);
+            _listener.Install();
+            _log.LogInfo($"Installed filtering log listener ({substrings.Length} substring filters, dedupe={dedupe}).");
+            return;
         }
 
-        foreach (string part in raw.Split(','))
+        // Once installed it stays in place. With both options off it forwards every line unchanged.
+        _listener.Configure(substrings, dedupe);
+        _log.LogInfo($"Filtering log listener updated ({substrings.Length} substring filters, dedupe={dedupe}).");
+    }
+
+    private static string[] ParseSubstrings(string raw)
+    {
+        var result = new List<string>();
+        if (!string.IsNullOrWhiteSpace(raw))
         {
-            string trimmed = part.Trim();
-            if (trimmed.Length > 0)
+            foreach (string part in raw.Split(','))
             {
-                result.Add(trimmed.ToLowerInvariant());
+                string trimmed = part.Trim();
+                if (trimmed.Length > 0)
+                {
+                    result.Add(trimmed);
+                }
             }
         }
-        return result;
+        return result.ToArray();
     }
 
     /// <summary>
-    /// Takes over the existing listeners (console, disk, Unity log) and forwards only the lines
-    /// that pass the substring filter and the repeat check. Fatal, Error and Warning lines are
-    /// never filtered by substring.
+    /// Takes over the listeners that exist when it is installed (console, disk, Unity log) and forwards
+    /// only the lines that pass the substring filter and the repeat check. Fatal, Error and Warning
+    /// lines are always forwarded as they are. Each downstream listener still applies its own log level.
     /// </summary>
     private sealed class FilteringListener : ILogListener
     {
-        private readonly List<string> _substrings;
-        private readonly bool _dedupe;
+        private const LogLevel AlwaysForwarded = LogLevel.Fatal | LogLevel.Error | LogLevel.Warning;
+
         private readonly List<ILogListener> _downstream = new List<ILogListener>();
-        private string _lastMessage;
-        private int _lastRepeat;
         private readonly object _lock = new object();
 
-        public FilteringListener(List<string> substrings, bool dedupe)
-        {
-            _substrings = substrings;
-            _dedupe = dedupe;
+        private volatile string[] _substrings = new string[0];
+        private volatile bool _dedupe;
 
+        // The last forwarded line that may be repeated. _lastMessage is null when there is none.
+        private string _lastMessage;
+        private LogLevel _lastLevel;
+        private ILogSource _lastSource;
+        private object _lastSender;
+        private int _repeats;
+
+        public void Configure(string[] substrings, bool dedupe)
+        {
+            _substrings = substrings ?? new string[0];
+            lock (_lock)
+            {
+                _dedupe = dedupe;
+                if (!dedupe)
+                {
+                    FlushRepeats();
+                    Forget();
+                }
+            }
+        }
+
+        public void Install()
+        {
             // Copy first: the loop removes from the live listener list.
             var existing = new List<ILogListener>(BepInEx.Logging.Logger.Listeners);
             foreach (ILogListener listener in existing)
@@ -91,20 +164,26 @@ internal static class LogSuppressor
                     BepInEx.Logging.Logger.Listeners.Remove(listener);
                 }
             }
+            BepInEx.Logging.Logger.Listeners.Add(this);
         }
-
-        public LogLevel LogLevelFilter => LogLevel.All;
 
         public void LogEvent(object sender, LogEventArgs e)
         {
-            string message = e.Data == null ? string.Empty : e.Data.ToString();
-
-            if ((e.Level & (LogLevel.Fatal | LogLevel.Error | LogLevel.Warning)) == 0)
+            if (e == null)
             {
-                string lower = message.ToLowerInvariant();
-                foreach (string substring in _substrings)
+                return;
+            }
+
+            string[] substrings = _substrings;
+            bool plain = (e.Level & AlwaysForwarded) == 0;
+            string message = null;
+
+            if (plain && (substrings.Length > 0 || _dedupe))
+            {
+                message = e.Data == null ? string.Empty : e.Data.ToString() ?? string.Empty;
+                foreach (string substring in substrings)
                 {
-                    if (lower.Contains(substring))
+                    if (message.IndexOf(substring, StringComparison.OrdinalIgnoreCase) >= 0)
                     {
                         return;
                     }
@@ -113,25 +192,57 @@ internal static class LogSuppressor
 
             lock (_lock)
             {
-                if (_dedupe && message == _lastMessage)
+                if (plain && _dedupe)
                 {
-                    _lastRepeat++;
-                    return;
+                    // Dedupe may have been switched on after the check above skipped building the text.
+                    message ??= e.Data == null ? string.Empty : e.Data.ToString() ?? string.Empty;
+
+                    // A repeat is the same text at the same level from the same source.
+                    if (_lastMessage != null && e.Level == _lastLevel && ReferenceEquals(e.Source, _lastSource) &&
+                        message == _lastMessage)
+                    {
+                        _repeats++;
+                        return;
+                    }
+
+                    FlushRepeats();
+                    _lastMessage = message;
+                    _lastLevel = e.Level;
+                    _lastSource = e.Source;
+                    _lastSender = sender;
+                }
+                else
+                {
+                    FlushRepeats();
+                    Forget();
                 }
 
-                if (_lastRepeat > 0)
-                {
-                    var summary = new LogEventArgs($"(previous message repeated {_lastRepeat} more times)", LogLevel.Info, e.Source);
-                    ForwardAll(sender, summary);
-                    _lastRepeat = 0;
-                }
-
-                _lastMessage = message;
-                ForwardAll(sender, e);
+                Forward(sender, e);
             }
         }
 
-        private void ForwardAll(object sender, LogEventArgs e)
+        /// <summary>Writes the pending repeat count under the name and level of the line it belongs to.</summary>
+        private void FlushRepeats()
+        {
+            if (_repeats == 0)
+            {
+                return;
+            }
+
+            int repeats = _repeats;
+            _repeats = 0;
+            string text = $"(previous message repeated {repeats} more {(repeats == 1 ? "time" : "times")})";
+            Forward(_lastSender, new LogEventArgs(text, _lastLevel, _lastSource));
+        }
+
+        private void Forget()
+        {
+            _lastMessage = null;
+            _lastSource = null;
+            _lastSender = null;
+        }
+
+        private void Forward(object sender, LogEventArgs e)
         {
             foreach (ILogListener listener in _downstream)
             {
@@ -141,13 +252,21 @@ internal static class LogSuppressor
                 }
                 catch
                 {
-                    // A broken downstream listener must not take the others down with it.
+                    // A broken downstream listener must not take the others down with it,
+                    // and logging the failure here would come straight back into this method.
                 }
             }
         }
 
         public void Dispose()
         {
+            lock (_lock)
+            {
+                FlushRepeats();
+                Forget();
+            }
+
+            // These were taken out of BepInEx's list, so nothing else will dispose them.
             foreach (ILogListener listener in _downstream)
             {
                 try
@@ -156,6 +275,7 @@ internal static class LogSuppressor
                 }
                 catch
                 {
+                    // Same reason as in Forward.
                 }
             }
             _downstream.Clear();

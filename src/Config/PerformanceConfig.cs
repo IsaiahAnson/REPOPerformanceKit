@@ -1,4 +1,8 @@
+using System;
+using System.Collections.Generic;
+using System.Reflection;
 using BepInEx.Configuration;
+using BepInEx.Logging;
 
 namespace REPOPerformance.Config;
 
@@ -7,6 +11,17 @@ namespace REPOPerformance.Config;
 /// </summary>
 internal sealed class PerformanceConfig
 {
+    /// <summary>Settings that earlier versions wrote and this version no longer reads.</summary>
+    private static readonly ConfigDefinition[] ObsoleteEntries =
+    {
+        new ConfigDefinition("FrameRate", "OverrideTargetFrameRate"),
+        new ConfigDefinition("FrameRate", "TargetFrameRate"),
+        new ConfigDefinition("FrameRate", "VSyncCount"),
+        new ConfigDefinition("AdaptivePhysics", "Enable"),
+        new ConfigDefinition("AdaptivePhysics", "BaselineFixedDeltaTime"),
+        new ConfigDefinition("GC", "EnableIncrementalGC"),
+    };
+
     // Logging
     public readonly ConfigEntry<bool> DisableUnityStackTraces;
     public readonly ConfigEntry<bool> SuppressPluginLogSpam;
@@ -14,14 +29,10 @@ internal sealed class PerformanceConfig
     public readonly ConfigEntry<bool> DedupeRepeatedLogs;
 
     // FrameRate
-    public readonly ConfigEntry<bool> OverrideTargetFrameRate;
-    public readonly ConfigEntry<int> TargetFrameRate;
-    public readonly ConfigEntry<int> VSyncCount;
     public readonly ConfigEntry<float> MaximumDeltaTime;
 
     // AdaptivePhysics
     public readonly ConfigEntry<bool> EnableAdaptivePhysics;
-    public readonly ConfigEntry<float> BaselineFixedDeltaTime;
     public readonly ConfigEntry<float> DegradedFixedDeltaTime;
     public readonly ConfigEntry<float> DegradeBelowFps;
     public readonly ConfigEntry<float> RecoverAboveFps;
@@ -31,7 +42,6 @@ internal sealed class PerformanceConfig
     public readonly ConfigEntry<float> CullDistanceMultiplier;
 
     // GC
-    public readonly ConfigEntry<bool> EnableIncrementalGC;
     public readonly ConfigEntry<bool> CollectGCOnSceneLoad;
 
     // TextureStreaming
@@ -41,53 +51,113 @@ internal sealed class PerformanceConfig
     // Diagnostics
     public readonly ConfigEntry<bool> ShowFpsOverlay;
 
-    public PerformanceConfig(ConfigFile file)
+    public PerformanceConfig(ConfigFile file, ManualLogSource log)
     {
-        DisableUnityStackTraces = file.Bind("Logging", "DisableUnityStackTraces", true,
-            "Disables Unity's internal stack-trace capture for Debug.Log/Warning. Stack-trace capture is one of the biggest GC sources in Unity games. Errors still keep stack traces.");
-        SuppressPluginLogSpam = file.Bind("Logging", "SuppressPluginLogSpam", true,
-            "Filter the BepInEx log-listener chain so repetitive plugin log lines are dropped.");
-        SuppressedSubstrings = file.Bind("Logging", "SuppressedSubstrings", "Patched method,Applying patch,Harmony.PatchAll",
-            "Comma-separated list of case-insensitive substrings. Any log line containing one of these is dropped. Leave empty to disable substring filtering.");
-        DedupeRepeatedLogs = file.Bind("Logging", "DedupeRepeatedLogs", true,
-            "Collapse identical consecutive log lines (prints '(previous message x N)' instead).");
+        // BepInEx rewrites the whole file on every Bind() unless this is off. Bind everything first,
+        // then write the file once.
+        bool saveOnConfigSet = file.SaveOnConfigSet;
+        file.SaveOnConfigSet = false;
+        try
+        {
+            DisableUnityStackTraces = file.Bind("Logging", "DisableUnityStackTraces", true,
+                "Turn off Unity's stack-trace capture for Debug.Log and Debug.LogWarning. Errors, exceptions and asserts keep a script stack trace.");
+            SuppressPluginLogSpam = file.Bind("Logging", "SuppressPluginLogSpam", true,
+                "Drop Info, Debug and Message log lines that contain one of SuppressedSubstrings. Warnings, errors and fatals are never dropped.");
+            SuppressedSubstrings = file.Bind("Logging", "SuppressedSubstrings", "Patched method,Applying patch,Harmony.PatchAll",
+                "Comma-separated, case-insensitive substrings used by SuppressPluginLogSpam. Leave empty to drop nothing.");
+            DedupeRepeatedLogs = file.Bind("Logging", "DedupeRepeatedLogs", true,
+                "Collapse identical consecutive Info, Debug and Message lines from the same source into one line plus '(previous message repeated N more times)'. Warnings, errors and fatals are never collapsed.");
 
-        OverrideTargetFrameRate = file.Bind("FrameRate", "OverrideTargetFrameRate", false,
-            "Force Application.targetFrameRate. Leave OFF unless you know your display refresh rate.");
-        TargetFrameRate = file.Bind("FrameRate", "TargetFrameRate", 144,
-            "Target frame rate when OverrideTargetFrameRate is true. -1 = uncapped.");
-        VSyncCount = file.Bind("FrameRate", "VSyncCount", -1,
-            "QualitySettings.vSyncCount. 0 = off, 1 = every refresh, 2 = every second refresh. -1 = do not change.");
-        MaximumDeltaTime = file.Bind("FrameRate", "MaximumDeltaTime", 0.1f,
-            "Time.maximumDeltaTime. Caps how much physics catch-up the game tries after a hitch. Prevents 'physics death spiral' where a stutter triggers more stutters.");
+            MaximumDeltaTime = file.Bind("FrameRate", "MaximumDeltaTime", 0.1f,
+                new ConfigDescription(
+                    "Time.maximumDeltaTime in seconds: the most game time one frame may advance, which caps physics catch-up after a hitch. 0 = leave the game's own value.",
+                    new AcceptableValueRange<float>(0f, 0.5f)));
 
-        EnableAdaptivePhysics = file.Bind("AdaptivePhysics", "Enable", true,
-            "Dynamically lower physics tick rate when FPS drops, restoring it when performance recovers.");
-        BaselineFixedDeltaTime = file.Bind("AdaptivePhysics", "BaselineFixedDeltaTime", 0.02f,
-            "Normal Time.fixedDeltaTime (0.02 = 50Hz, Unity default).");
-        DegradedFixedDeltaTime = file.Bind("AdaptivePhysics", "DegradedFixedDeltaTime", 0.0333f,
-            "Fallback fixedDeltaTime under load (0.0333 = 30Hz).");
-        DegradeBelowFps = file.Bind("AdaptivePhysics", "DegradeBelowFps", 40f,
-            "Drop to degraded fixedDeltaTime if smoothed FPS falls below this.");
-        RecoverAboveFps = file.Bind("AdaptivePhysics", "RecoverAboveFps", 55f,
-            "Return to baseline fixedDeltaTime if smoothed FPS rises above this. Must be above DegradeBelowFps to create a hysteresis band.");
+            EnableAdaptivePhysics = file.Bind("AdaptivePhysics", "EnableAdaptivePhysics", false,
+                "While the smoothed frame rate is low, run physics at a lower tick rate, and put the game's own tick rate back when the frame rate recovers. Changes how physics behaves, and on a host it affects every player. Off by default.");
+            DegradedFixedDeltaTime = file.Bind("AdaptivePhysics", "DegradedFixedDeltaTime", 0.0333f,
+                new ConfigDescription(
+                    "Time.fixedDeltaTime used while the frame rate is low (0.0333 = 30 Hz). Only used when it is larger than the game's own value.",
+                    new AcceptableValueRange<float>(0.02f, 0.05f)));
+            DegradeBelowFps = file.Bind("AdaptivePhysics", "DegradeBelowFps", 40f,
+                new ConfigDescription(
+                    "Switch to DegradedFixedDeltaTime when the smoothed FPS falls below this.",
+                    new AcceptableValueRange<float>(10f, 120f)));
+            RecoverAboveFps = file.Bind("AdaptivePhysics", "RecoverAboveFps", 55f,
+                new ConfigDescription(
+                    "Put the game's own fixedDeltaTime back when the smoothed FPS rises above this. Treated as at least DegradeBelowFps + 5.",
+                    new AcceptableValueRange<float>(15f, 240f)));
 
-        EnableCullDistanceBoost = file.Bind("Culling", "Enable", true,
-            "Apply per-layer cull distances to the main camera so tiny/detail objects stop rendering at their multiplied distance. Invisible at conservative multipliers.");
-        CullDistanceMultiplier = file.Bind("Culling", "Multiplier", 1f,
-            "Multiplier applied to the main camera's far clip plane to derive a detail-cull distance. 1.0 = unchanged, 0.75 = more aggressive. Only affects layers > 7.");
+            EnableCullDistanceBoost = file.Bind("Culling", "Enable", false,
+                "Give the main camera a shorter cull distance on non-gameplay layers above 7 (far clip plane x Multiplier). Does nothing while Multiplier is 1.0. Player, enemy, grabbable-object and cart layers are never touched.");
+            CullDistanceMultiplier = file.Bind("Culling", "Multiplier", 1f,
+                new ConfigDescription(
+                    "Cull distance as a fraction of the main camera's far clip plane. 1.0 = unchanged, lower = objects on the affected layers stop rendering sooner.",
+                    new AcceptableValueRange<float>(0.25f, 1f)));
 
-        EnableIncrementalGC = file.Bind("GC", "EnableIncrementalGC", true,
-            "Spread GC work across frames instead of one big stall (Unity incremental GC).");
-        CollectGCOnSceneLoad = file.Bind("GC", "CollectGCOnSceneLoad", true,
-            "Run a full GC.Collect during scene loads (hidden by the loading screen).");
+            CollectGCOnSceneLoad = file.Bind("GC", "CollectGCOnSceneLoad", true,
+                "Run a full GC.Collect after each scene change (menu, lobby or level), while the loading screen is still up.");
 
-        EnableTextureStreaming = file.Bind("TextureStreaming", "Enable", true,
-            "Enable Unity mipmap streaming. Loads only the mip levels visible at the current camera distance, keeping VRAM bounded regardless of how many content mods are installed. Invisible at adequate memory budgets.");
-        StreamingMipmapsMemoryBudget = file.Bind("TextureStreaming", "MemoryBudgetMB", 1024,
-            "VRAM budget for streamed textures in MB. Unity default is 512. Raise to 1024-2048 on GPUs with >= 6GB VRAM for better LOD retention. Clamped to [128, 8192].");
+            EnableTextureStreaming = file.Bind("TextureStreaming", "Enable", true,
+                "Turn on Unity mipmap streaming. Only textures the game imported with streaming mipmaps take part; the log reports how many there are after each scene change.");
+            StreamingMipmapsMemoryBudget = file.Bind("TextureStreaming", "MemoryBudgetMB", 1024,
+                new ConfigDescription(
+                    "Memory budget for streamed textures in MB (Unity's default is 512).",
+                    new AcceptableValueRange<int>(128, 8192)));
 
-        ShowFpsOverlay = file.Bind("Diagnostics", "ShowFpsOverlay", false,
-            "Draw a small FPS / frametime counter in the top-left corner.");
+            ShowFpsOverlay = file.Bind("Diagnostics", "ShowFpsOverlay", false,
+                "Draw a small FPS / frame time / physics tick counter in the top-left corner.");
+
+            RemoveObsoleteEntries(file, log);
+        }
+        finally
+        {
+            file.SaveOnConfigSet = saveOnConfigSet;
+        }
+
+        try
+        {
+            file.Save();
+        }
+        catch (Exception ex)
+        {
+            // Another program holding the file open must not stop the plugin; the values are already in memory.
+            log.LogWarning("Could not write the config file (" + ex.Message + "). The settings still apply for this session.");
+        }
+    }
+
+    /// <summary>
+    /// BepInEx keeps values it found in the file but nobody bound ("orphaned" entries) and writes them
+    /// back on every save. That list is private, so it is reached by reflection; if BepInEx changes it,
+    /// the old lines simply stay in the file.
+    /// </summary>
+    private static void RemoveObsoleteEntries(ConfigFile file, ManualLogSource log)
+    {
+        try
+        {
+            PropertyInfo property = typeof(ConfigFile).GetProperty("OrphanedEntries", BindingFlags.Instance | BindingFlags.NonPublic);
+            if (property == null || !(property.GetValue(file, null) is Dictionary<ConfigDefinition, string> orphaned))
+            {
+                return;
+            }
+
+            int removed = 0;
+            foreach (ConfigDefinition entry in ObsoleteEntries)
+            {
+                if (orphaned.Remove(entry))
+                {
+                    removed++;
+                }
+            }
+
+            if (removed > 0)
+            {
+                log.LogInfo($"Removed {removed} setting(s) from the config file that this version no longer uses.");
+            }
+        }
+        catch (Exception ex)
+        {
+            log.LogDebug("Could not remove obsolete config entries: " + ex.Message);
+        }
     }
 }
