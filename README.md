@@ -1,13 +1,18 @@
 <img src="https://raw.githubusercontent.com/IsaiahAnson/REPOPerformanceKit/main/assets/banner.svg" width="100%" alt="REPOPerformanceKit, a R.E.P.O. mod by Mentalize. Unity performance switches in one config file. Client-side, no game code patched, BepInEx 5.">
 
+<!-- github-only:start -->
 <a href="https://thunderstore.io/c/repo/p/Mentalize/REPOPerformanceKit/"><img src="https://raw.githubusercontent.com/IsaiahAnson/REPOPerformanceKit/stats/downloads.svg" width="100%" alt="Download count and latest version on Thunderstore. Get it on Thunderstore."></a>
+<!-- github-only:end -->
 
 A BepInEx plugin for R.E.P.O. that exposes a set of Unity engine configuration switches through a standard BepInEx config file. It does not patch any REPO game code.
 
 The mod does not guarantee an FPS improvement. Whether it helps, hurts, or does nothing depends on your hardware, your other mods, and the specific scenes you play. Treat every feature as a knob you may or may not want to turn.
 
+<!-- github-only:start -->
 **Live release:** [thunderstore.io/c/repo/p/Mentalize/REPOPerformanceKit](https://thunderstore.io/c/repo/p/Mentalize/REPOPerformanceKit/) — published under the author handle Mentalize, install via Thunderstore Mod Manager or by dropping the DLL into BepInEx (see [Install](#install)).
+<!-- github-only:end -->
 
+<!-- github-only:start -->
 ## Approach, tools, and assumptions
 
 **Approach.** This is a *configuration kit*, not a Harmony-patch mod. Every feature is a Unity engine knob — log filtering, a scene-load `GC.Collect`, `Time.maximumDeltaTime`, `Time.fixedDeltaTime`, mipmap streaming, layer cull distances, optional FPS overlay — toggled by a BepInEx config flag and called through the public Unity API. The plugin never patches REPO's own code, never reads or modifies REPO game state, and never sends any network traffic. The deliberate intent is a transparent "every Unity perf knob in one place" tool rather than a black box of patches that other mods or REPO updates could collide with.
@@ -24,6 +29,7 @@ The mod does not guarantee an FPS improvement. Whether it helps, hurts, or does 
 - The adaptive `Time.fixedDeltaTime` feature affects the physics tick rate of objects the host simulates authoritatively over Photon, which is why it is off by default. On a networked host noticing imprecise rigidbody behaviour during FPS dips, `EnableAdaptivePhysics = false` cleanly disables it and restores the game's own tick rate.
 - Each feature starts inside its own `try`/`catch`, so one feature that fails on a future game build is logged and skipped without stopping the others.
 - The plugin is purely client-side: each player runs their own copy with their own config; nothing replicates over the network.
+<!-- github-only:end -->
 
 ## What the DLL actually does
 
@@ -47,10 +53,11 @@ That is the complete list of things this plugin does. The per-frame parts all si
 
 ## Install
 
-Thunderstore Mod Manager: open the [live release](https://thunderstore.io/c/repo/p/Mentalize/REPOPerformanceKit/) and click Install. Manual: extract `REPOPerformance.dll` into `<profile>/BepInEx/plugins/REPOPerformanceKit/`. Requires `BepInEx-BepInExPack` and `REPOModding-REPOConfig` (which in turn requires `REPOModding-MenuLib`); Thunderstore Mod Manager installs all three automatically, a manual install has to add them by hand.
+Thunderstore Mod Manager: find REPOPerformanceKit and click Install. Manual: extract `REPOPerformance.dll` into `<profile>/BepInEx/plugins/REPOPerformanceKit/`. Requires `BepInEx-BepInExPack` and `REPOModding-REPOConfig` (which in turn requires `REPOModding-MenuLib`); Thunderstore Mod Manager installs all three automatically, a manual install has to add them by hand.
 
 REPOConfig adds a Mods page to the in-game settings menu that lists every option in this plugin's config file. Every setting applies as soon as you press Save Changes on that page; no restart is needed. The one that waits is `CollectGCOnSceneLoad`, which is read at the next scene change. Editing the config file by hand is only picked up when the game starts, so do that with the game closed.
 
+<!-- github-only:start -->
 ## Building from source
 
 The C# project is in [`src/`](src): one file per feature under `src/Features/`, the settings in `src/Config/PerformanceConfig.cs`, and the entry point in `src/Plugin.cs`. It needs only the .NET SDK (6 or later). BepInEx and the Unity modules come from NuGet as compile-only references (`src/NuGet.Config` adds the BepInEx feed), so no game files are required.
@@ -61,7 +68,10 @@ dotnet build src -c Release
 
 The DLL lands in `src/bin/Release/net472/REPOPerformance.dll`. The plugin version is read from `version_number` in `manifest.json` at build time, so the DLL and the Thunderstore package always report the same version. A GitHub Actions job builds it on every change to `src/` or `manifest.json`.
 
+`python tools/make_package.py` builds the DLL and writes the Thunderstore zip to `dist/`. The README inside that zip leaves out the parts of this file marked `github-only`: the download card, the link to the Thunderstore page, and the sections on approach, building from source and the license.
+
 To use the precompiled DLL: drop `REPOPerformance.dll` into `<BepInEx profile>/BepInEx/plugins/REPOPerformanceKit/` and launch the game; configuration is read from `BepInEx/config/com.mentalize.repoperformance.cfg`, generated with defaults on first run.
+<!-- github-only:end -->
 
 ## Compatibility
 
@@ -97,8 +107,10 @@ Note that on a networked host, the adaptive physics feature (off by default) low
 ### 0.1.0
 - Initial implementation (LogSuppressor, FrameRateTuner, GCTuner, AdaptivePhysics, CullDistanceBoost, FPSCounter).
 
+<!-- github-only:start -->
 ## License
 
 Copyright (c) 2026 Isaiah Anson. All rights reserved. You may use the released software for
 personal, non-commercial use; copying, modifying or redistributing it requires written
 permission. See [LICENSE](LICENSE).
+<!-- github-only:end -->
